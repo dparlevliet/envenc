@@ -1,0 +1,72 @@
+#!/bin/bash
+
+# Check if the file path is provided
+if [ "$#" -ne 1 ]; then
+    echo "Usage: $0 /path/to/file.env"
+    exit 1
+fi
+
+FILE_PATH="$1"
+
+# Check if the file exists
+if [ ! -f "$FILE_PATH" ]; then
+    echo "File not found: $FILE_PATH"
+    exit 1
+fi
+
+while true; do
+    echo -n "Enter AES-256 password (min. 24 characters, no leading/trailing whitespace): "
+    read -s PASSWORD_RAW
+    echo
+
+    PASSWORD=$(echo "$PASSWORD_RAW" | tr -d '[:space:]')
+
+    if [ "${#PASSWORD}" -ge 24 ] && [ "$PASSWORD" == "$PASSWORD_RAW" ]; then
+        break
+    elif [ "$PASSWORD" != "$PASSWORD_RAW" ]; then
+        echo "Password should not have leading or trailing whitespace. Please try again."
+    else
+        echo "Password must be at least 24 characters. Please try again."
+    fi
+done
+
+ENCRYPTED_FILE_PATH="${FILE_PATH}.encrypted"
+echo "" > "$ENCRYPTED_FILE_PATH"
+
+while IFS= read -r line; do
+    if [[ "$line" =~ ^\# ]] || [ -z "$line" ]; then
+        continue
+    fi
+
+    KEY="${line%=*}"
+    VALUE="${line#*=}"
+
+    ENCRYPTED_VALUE=$(echo -n "$VALUE" | openssl enc -aes-256-cbc -a -salt -pbkdf2 -iter 100000 -pass pass:"$PASSWORD" | tr -d '\n')
+    echo "$KEY=$ENCRYPTED_VALUE" >> "$ENCRYPTED_FILE_PATH"
+done < "$FILE_PATH"
+
+echo "Encryption of values successful: $ENCRYPTED_FILE_PATH"
+
+# Validation step
+echo "Validating encrypted data..."
+
+while IFS= read -r line; do
+    if [[ "$line" =~ ^\# ]] || [ -z "$line" ]; then
+        continue
+    fi
+
+    KEY="${line%=*}"
+    ORIG_VALUE="${line#*=}"
+
+    # Extract encrypted value from the encrypted file and decrypt it
+    ENCRYPTED_VALUE=$(grep "^$KEY=" "$ENCRYPTED_FILE_PATH" | sed "s/^$KEY=//")
+    DECRYPTED_VALUE=$(echo "$ENCRYPTED_VALUE" | openssl enc -aes-256-cbc -d -a -pbkdf2 -iter 100000 -pass pass:"$PASSWORD" 2> /dev/null)
+
+    # Check if decrypted value matches the original value
+    if [ "$DECRYPTED_VALUE" != "$ORIG_VALUE" ]; then
+        echo "Validation failed for key: $KEY. Decrypted value does not match the original."
+        exit 1
+    fi
+done < "$FILE_PATH"
+
+echo "Validation successful: Encrypted and original values match."
