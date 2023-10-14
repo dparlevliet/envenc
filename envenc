@@ -41,7 +41,7 @@ while IFS= read -r line; do
     KEY="${line%=*}"
     VALUE="${line#*=}"
 
-    ENCRYPTED_VALUE=$(echo -n "$VALUE" | openssl enc -aes-256-cbc -a -salt -pbkdf2 -iter 100000 -pass pass:"$PASSWORD" | tr -d '\n')
+    ENCRYPTED_VALUE=$(echo -n "$VALUE" | openssl enc -aes-256-cbc -a -salt -pbkdf2 -iter 2000000 -pass pass:"$PASSWORD" | tr -d '\n')
     echo "$KEY=$ENCRYPTED_VALUE" >> "$ENCRYPTED_FILE_PATH"
 done < "$FILE_PATH"
 
@@ -60,7 +60,7 @@ while IFS= read -r line; do
 
     # Extract encrypted value from the encrypted file and decrypt it
     ENCRYPTED_VALUE=$(grep "^$KEY=" "$ENCRYPTED_FILE_PATH" | sed "s/^$KEY=//")
-    DECRYPTED_VALUE=$(echo "$ENCRYPTED_VALUE" | openssl enc -aes-256-cbc -d -a -pbkdf2 -iter 100000 -pass pass:"$PASSWORD" 2> /dev/null)
+    DECRYPTED_VALUE=$(echo "$ENCRYPTED_VALUE" | openssl enc -aes-256-cbc -d -a -pbkdf2 -iter 2000000 -pass pass:"$PASSWORD" 2> /dev/null)
 
     # Check if decrypted value matches the original value
     if [ "$DECRYPTED_VALUE" != "$ORIG_VALUE" ]; then
